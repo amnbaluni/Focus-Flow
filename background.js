@@ -47,6 +47,18 @@ async function setTabEnabledState(tabId, enabled) {
   });
 }
 
+async function getTabStudyModeState(tabId) {
+  const storage = await chrome.storage.local.get(`tab_${tabId}_studyMode`);
+  return storage[`tab_${tabId}_studyMode`] || false;
+}
+
+async function setTabStudyModeState(tabId, enabled) {
+  await chrome.storage.local.set({
+    [`tab_${tabId}_studyMode`]: enabled,
+    [`tab_${tabId}_studyMode_at`]: Date.now()
+  });
+}
+
 // ============================================
 // DEFAULT SETTINGS
 // ============================================
@@ -278,6 +290,12 @@ async function handleMessage(message, sender) {
     case 'DISABLE_CURRENT_VIDEO':
       return await handleDisableCurrentVideo(payload?.url);
 
+    case 'STUDY_MODE_TOGGLE':
+      return await handleStudyModeToggle(payload?.tabId, payload?.enabled);
+
+    case 'GET_STUDY_MODE_STATE':
+      return await handleGetStudyModeState(payload?.tabId || sender.tab?.id);
+
     default:
       console.warn('[FocusFlow] Unknown message type:', type);
       return { success: false, error: 'Unknown message type' };
@@ -459,6 +477,34 @@ async function handleDisableCurrentVideo(url) {
   return { success: true };
 }
 
+async function handleStudyModeToggle(tabId, enabled) {
+  if (!tabId) {
+    return { success: false, error: 'No tab ID' };
+  }
+
+  await setTabStudyModeState(tabId, enabled);
+
+  try {
+    await chrome.tabs.sendMessage(tabId, {
+      type: 'STUDY_MODE_STATE',
+      payload: { enabled }
+    });
+  } catch (e) {
+    console.log('[FocusFlow] Content script not available for Study Mode notification:', e.message);
+  }
+
+  return { success: true, enabled };
+}
+
+async function handleGetStudyModeState(tabId) {
+  if (!tabId) {
+    return { success: false, error: 'No tab ID', enabled: false };
+  }
+
+  const enabled = await getTabStudyModeState(tabId);
+  return { success: true, enabled };
+}
+
 // ============================================
 // TAB MANAGEMENT
 // ============================================
@@ -469,7 +515,9 @@ async function handleDisableCurrentVideo(url) {
 chrome.tabs.onRemoved.addListener(async (tabId) => {
   await chrome.storage.local.remove([
     `tab_${tabId}_enabled`,
-    `tab_${tabId}_enabled_at`
+    `tab_${tabId}_enabled_at`,
+    `tab_${tabId}_studyMode`,
+    `tab_${tabId}_studyMode_at`
   ]);
 });
 

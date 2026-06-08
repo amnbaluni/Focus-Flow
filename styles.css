@@ -149,6 +149,23 @@ body {
   transform: translateX(24px);
 }
 
+/* ============================================ TOGGLE DIVIDER ============================================ */
+
+.toggle-divider {
+  border: none;
+  border-top: 1px solid #e0e0e0;
+  margin: 16px 0;
+}
+
+/* ============================================ TOGGLE DESCRIPTION ============================================ */
+
+.toggle-description {
+  font-size: 12px;
+  color: #5f6368;
+  margin-top: 6px;
+  line-height: 1.4;
+}
+
 /* ============================================ CAMERA STATUS ============================================ */
 
 .camera-status {

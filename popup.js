@@ -22,7 +22,8 @@ const elements = {
   yawThreshold: document.getElementById('yaw-threshold'),
   yawThresholdValue: document.getElementById('yaw-threshold-value'),
   pitchThreshold: document.getElementById('pitch-threshold'),
-  pitchThresholdValue: document.getElementById('pitch-threshold-value')
+  pitchThresholdValue: document.getElementById('pitch-threshold-value'),
+  studyModeToggle: document.getElementById('study-mode-toggle')
 };
 
 // ============================================
@@ -32,6 +33,7 @@ const elements = {
 let currentState = 'disabled';
 let currentTabId = null;
 let settingsDebounceTimer = null;
+let studyModeEnabled = false;
 
 // ============================================
 // INITIALIZATION
@@ -59,8 +61,16 @@ async function init() {
     // Load settings
     await loadSettings();
 
+    // Load Study Mode state
+    await loadStudyModeState();
+
     // Set up event listeners
     elements.toggle.addEventListener('change', handleToggleChange);
+
+    // Study Mode toggle
+    if (elements.studyModeToggle) {
+      elements.studyModeToggle.addEventListener('change', handleStudyModeToggle);
+    }
     
     // Direct enable button for debugging
     const enableBtn = document.getElementById('enable-btn');
@@ -334,6 +344,45 @@ function updateUI() {
     elements.statusBadge.classList.remove('active');
     elements.statusBadge.classList.add('inactive');
     elements.toggle.checked = false;
+  }
+  updateStudyModeUI();
+}
+
+async function loadStudyModeState() {
+  try {
+    const response = await sendMessage({ type: 'GET_STUDY_MODE_STATE', payload: { tabId: currentTabId } });
+    if (response.success) {
+      studyModeEnabled = response.enabled;
+      updateStudyModeUI();
+    }
+  } catch (error) {
+    console.error('[FocusFlow] Failed to load Study Mode state:', error);
+  }
+}
+
+async function handleStudyModeToggle(event) {
+  const enabled = event.target.checked;
+  try {
+    const response = await sendMessage({
+      type: 'STUDY_MODE_TOGGLE',
+      payload: { enabled, tabId: currentTabId }
+    });
+    if (response.success) {
+      studyModeEnabled = enabled;
+      updateStudyModeUI();
+    } else {
+      elements.studyModeToggle.checked = !enabled;
+      console.error('[FocusFlow] Study Mode toggle failed:', response.error);
+    }
+  } catch (error) {
+    elements.studyModeToggle.checked = !enabled;
+    console.error('[FocusFlow] Study Mode toggle error:', error);
+  }
+}
+
+function updateStudyModeUI() {
+  if (elements.studyModeToggle) {
+    elements.studyModeToggle.checked = studyModeEnabled;
   }
 }
 

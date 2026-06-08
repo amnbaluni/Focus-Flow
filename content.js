@@ -8,6 +8,75 @@
     AD_PATTERNS: [/ads\.youtube\.com/, /doubleclick\.net/, /googlesyndication\.com/],
   };
 
+  const STUDY_MODE = {
+    enabled: false,
+    styleEl: null,
+    clickHandler: null,
+    mouseDownHandler: null,
+    mouseOverHandler: null,
+    originalPushState: null,
+    originalReplaceState: null,
+    isOverridingHistory: false
+  };
+
+  const STUDY_MODE_SELECTORS = [
+    '#related',
+    '#secondary',
+    '#secondary-inner',
+    'ytd-rich-item-renderer',
+    'ytd-video-renderer',
+    'ytd-grid-video-renderer',
+    'ytd-video-card',
+    'ytp-ce-element',
+    'ytp-endscreen-content',
+    '.ytp-iv-video-content',
+    '.ytp-fullscreen-grid-stills-container'
+  ];
+
+  const STUDY_MODE_EXCLUDE_SELECTORS = [
+    '#search-input',
+    '#search-form',
+    '#logo',
+    'ytd-logo',
+    '.ytp-chrome-controls',
+    '.ytp-right-controls',
+    '.ytp-left-controls',
+    '.ytp-title-link',
+    '.ytp-popup',
+    '.ytp-settings-menu'
+  ];
+
+  const STUDY_MODE_OVERLAY_CSS = `
+    .ff-study-mode-blocked {
+      position: relative !important;
+      opacity: 0.35 !important;
+      pointer-events: none !important;
+      cursor: default !important;
+      user-select: none !important;
+    }
+    .ff-study-mode-blocked::after {
+      content: attr(data-ff-tooltip);
+      position: absolute;
+      bottom: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.85);
+      color: #fff;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-family: Roboto, Arial, sans-serif;
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s;
+      z-index: 999999;
+    }
+    .ff-study-mode-blocked:hover::after {
+      opacity: 1;
+    }
+  `;
+
   let videoEl = null;
   let stream = null;
   let cameraVideoEl = null;
@@ -28,11 +97,228 @@
   let focusedStreak = 0;
   const TRANSITION_FRAMES = 3;
 
+  let studyModeObserver = null;
+  let studyModeVideoEndedHandler = null;
+
+  function enableStudyMode() {
+    if (STUDY_MODE.enabled) return;
+    STUDY_MODE.enabled = true;
+    injectStudyModeCSS();
+    applyStudyModeGraying();
+    setupStudyModeClickInterception();
+    overrideHistoryAPI();
+    setupStudyModeAutoplaySuppression();
+    console.log('[FocusFlow] Study Mode enabled');
+  }
+
+  function disableStudyMode() {
+    if (!STUDY_MODE.enabled) return;
+    STUDY_MODE.enabled = false;
+    removeStudyModeCSS();
+    removeStudyModeGraying();
+    teardownStudyModeClickInterception();
+    restoreHistoryAPI();
+    teardownStudyModeAutoplaySuppression();
+    console.log('[FocusFlow] Study Mode disabled');
+  }
+
+  function injectStudyModeCSS() {
+    if (STUDY_MODE.styleEl) return;
+    STUDY_MODE.styleEl = document.createElement('style');
+    STUDY_MODE.styleEl.id = 'ff-study-mode-styles';
+    STUDY_MODE.styleEl.textContent = STUDY_MODE_OVERLAY_CSS;
+    document.head.appendChild(STUDY_MODE.styleEl);
+  }
+
+  function removeStudyModeCSS() {
+    if (STUDY_MODE.styleEl) {
+      STUDY_MODE.styleEl.remove();
+      STUDY_MODE.styleEl = null;
+    }
+  }
+
+  function applyStudyModeGraying() {
+    STUDY_MODE_SELECTORS.forEach(selector => {
+      document.querySelectorAll(selector).forEach(el => {
+        if (isInsideExcludedArea(el)) return;
+        el.classList.add('ff-study-mode-blocked');
+        el.setAttribute('data-ff-tooltip', 'Study Mode active — click disabled');
+      });
+    });
+    document.querySelectorAll('a[href*="/watch"]').forEach(el => {
+      if (isInsideExcludedArea(el)) return;
+      el.classList.add('ff-study-mode-blocked');
+      el.setAttribute('data-ff-tooltip', 'Study Mode active — click disabled');
+    });
+    document.querySelectorAll('a[href*="youtube.com/watch"]').forEach(el => {
+      if (isInsideExcludedArea(el)) return;
+      el.classList.add('ff-study-mode-blocked');
+      el.setAttribute('data-ff-tooltip', 'Study Mode active — click disabled');
+    });
+  }
+
+  function isInsideExcludedArea(el) {
+    return STUDY_MODE_EXCLUDE_SELECTORS.some(selector => {
+      return el.closest(selector) !== null;
+    });
+  }
+
+  function removeStudyModeGraying() {
+    document.querySelectorAll('.ff-study-mode-blocked').forEach(el => {
+      el.classList.remove('ff-study-mode-blocked');
+      el.removeAttribute('data-ff-tooltip');
+    });
+  }
+
+  function setupStudyModeClickInterception() {
+    STUDY_MODE.clickHandler = function(e) {
+      const target = e.target.closest('a') || e.target;
+      if (!target || !target.href) return;
+      if (target.href.includes('/watch') || target.href.includes('youtube.com/watch')) {
+        if (isInsideExcludedArea(target)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('[FocusFlow] Study Mode blocked navigation to:', target.href);
+      }
+    };
+    STUDY_MODE.mouseDownHandler = function(e) {
+      const target = e.target.closest('a') || e.target;
+      if (!target || !target.href) return;
+      if (target.href.includes('/watch') || target.href.includes('youtube.com/watch')) {
+        if (isInsideExcludedArea(target)) return;
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+    document.addEventListener('click', STUDY_MODE.clickHandler, true);
+    document.addEventListener('mousedown', STUDY_MODE.mouseDownHandler, true);
+  }
+
+  function teardownStudyModeClickInterception() {
+    if (STUDY_MODE.clickHandler) {
+      document.removeEventListener('click', STUDY_MODE.clickHandler, true);
+      STUDY_MODE.clickHandler = null;
+    }
+    if (STUDY_MODE.mouseDownHandler) {
+      document.removeEventListener('mousedown', STUDY_MODE.mouseDownHandler, true);
+      STUDY_MODE.mouseDownHandler = null;
+    }
+  }
+
+  function overrideHistoryAPI() {
+    if (STUDY_MODE.isOverridingHistory) return;
+    STUDY_MODE.originalPushState = history.pushState;
+    STUDY_MODE.originalReplaceState = history.replaceState;
+    const originalPush = history.pushState.bind(history);
+    const originalReplace = history.replaceState.bind(history);
+    history.pushState = function(...args) {
+      const url = args[2] || '';
+      if (STUDY_MODE.enabled && (url.includes('/watch') || url.includes('youtube.com/watch'))) {
+        return;
+      }
+      return originalPush.apply(history, args);
+    };
+    history.replaceState = function(...args) {
+      const url = args[2] || '';
+      if (STUDY_MODE.enabled && (url.includes('/watch') || url.includes('youtube.com/watch'))) {
+        return;
+      }
+      return originalReplace.apply(history, args);
+    };
+    STUDY_MODE.isOverridingHistory = true;
+  }
+
+  function restoreHistoryAPI() {
+    if (!STUDY_MODE.isOverridingHistory) return;
+    if (STUDY_MODE.originalPushState) {
+      history.pushState = STUDY_MODE.originalPushState;
+      STUDY_MODE.originalPushState = null;
+    }
+    if (STUDY_MODE.originalReplaceState) {
+      history.replaceState = STUDY_MODE.originalReplaceState;
+      STUDY_MODE.originalReplaceState = null;
+    }
+    STUDY_MODE.isOverridingHistory = false;
+  }
+
+  function setupStudyModeAutoplaySuppression() {
+    if (studyModeVideoEndedHandler) return;
+    studyModeVideoEndedHandler = function() {
+      if (!STUDY_MODE.enabled) return;
+      const autoPlayButton = document.querySelector('.ytp-autonav-toggle-button');
+      if (autoPlayButton && autoPlayButton.getAttribute('aria-checked') === 'true') {
+        autoPlayButton.click();
+      }
+      const nextVideoButton = document.querySelector('a.ytp-next-button');
+      if (nextVideoButton) {
+        nextVideoButton.style.pointerEvents = 'none';
+        nextVideoButton.style.opacity = '0.3';
+      }
+    };
+    const videoEl = document.querySelector('video');
+    if (videoEl) {
+      videoEl.addEventListener('ended', studyModeVideoEndedHandler);
+    }
+  }
+
+  function teardownStudyModeAutoplaySuppression() {
+    const videoEl = document.querySelector('video');
+    if (videoEl && studyModeVideoEndedHandler) {
+      videoEl.removeEventListener('ended', studyModeVideoEndedHandler);
+    }
+    studyModeVideoEndedHandler = null;
+    const autoPlayButton = document.querySelector('.ytp-autonav-toggle-button');
+    if (autoPlayButton && autoPlayButton.getAttribute('aria-checked') === 'false') {
+    }
+    const nextVideoButton = document.querySelector('a.ytp-next-button');
+    if (nextVideoButton) {
+      nextVideoButton.style.pointerEvents = '';
+      nextVideoButton.style.opacity = '';
+    }
+  }
+
+  function setupStudyModeObserver() {
+    if (studyModeObserver) return;
+    studyModeObserver = new MutationObserver((mutations) => {
+      if (!STUDY_MODE.enabled) return;
+      const hasNewNodes = mutations.some(m => m.addedNodes.length > 0);
+      if (hasNewNodes) {
+        applyStudyModeGraying();
+      }
+    });
+    if (document.body) {
+      studyModeObserver.observe(document.body, { childList: true, subtree: true });
+    }
+  }
+
+  function checkStudyModeState() {
+    console.log('[FocusFlow Content] checkStudyModeState called');
+    chrome.runtime.sendMessage({ type: 'GET_STUDY_MODE_STATE' }, (response) => {
+      console.log('[FocusFlow Content] GET_STUDY_MODE_STATE response:', response);
+      if (response && response.enabled) {
+        console.log('[FocusFlow Content] Study Mode is enabled on init, activating');
+        enableStudyMode();
+      }
+    });
+  }
+
+  function setupStudyModeNavigationHandler() {
+    document.addEventListener('yt-navigate-finish', () => {
+      if (STUDY_MODE.enabled) {
+        console.log('[FocusFlow] SPA navigation detected, reapplying Study Mode');
+        applyStudyModeGraying();
+        setupStudyModeAutoplaySuppression();
+      }
+    });
+  }
+
   function init() {
     try {
       setupVideoDetection();
       setupServiceWorkerConnection();
       loadSettings();
+      setupStudyModeObserver();
+      setupStudyModeNavigationHandler();
     } catch (err) {
       console.error('[FocusFlow] Init error:', err);
     }
@@ -566,6 +852,13 @@
           settings = { ...settings, ...msg.payload };
         }
         respond({ success: true });
+      } else if (msg.type === 'STUDY_MODE_STATE') {
+        if (msg.payload?.enabled) {
+          enableStudyMode();
+        } else {
+          disableStudyMode();
+        }
+        respond({ success: true });
       }
       return true;
     });
@@ -593,5 +886,7 @@
 
   console.log('[FocusFlow Content] Scheduling checkInitialState');
   setTimeout(checkInitialState, 100);
+  console.log('[FocusFlow Content] Scheduling checkStudyModeState');
+  setTimeout(checkStudyModeState, 200);
   console.log('[FocusFlow Content] IIFE complete');
 })();
