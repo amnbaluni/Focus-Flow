@@ -41,7 +41,6 @@ let studyModeEnabled = false;
 
 async function init() {
   try {
-    console.log('[FocusFlow Popup] init called');
     // Get current tab
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab) {
@@ -50,7 +49,6 @@ async function init() {
     }
 
     currentTabId = tab.id;
-    console.log('[FocusFlow Popup] currentTabId:', currentTabId);
 
     // Load current state for this tab
     await loadState();
@@ -74,10 +72,8 @@ async function init() {
     
     // Direct enable button for debugging
     const enableBtn = document.getElementById('enable-btn');
-    console.log('[FocusFlow Popup] enableBtn element:', enableBtn);
     if (enableBtn) {
       enableBtn.addEventListener('click', () => {
-        console.log('[FocusFlow Popup] Enable button clicked');
         enableExtension();
       });
     }
@@ -98,7 +94,6 @@ async function init() {
       elements.pitchThreshold.addEventListener('input', handleSliderChange);
     }
 
-    console.log('[FocusFlow Popup] Initialized for tab:', currentTabId);
   } catch (err) {
     console.error('[FocusFlow Popup] init error:', err);
   }
@@ -125,12 +120,9 @@ async function loadState() {
 }
 
 async function sendMessage(message) {
-  console.log('[FocusFlow Popup] sendMessage called with:', message.type);
   return new Promise((resolve, reject) => {
     chrome.runtime.sendMessage(message, (response) => {
-      console.log('[FocusFlow Popup] sendMessage response:', response);
       if (chrome.runtime.lastError) {
-        console.log('[FocusFlow Popup] lastError:', chrome.runtime.lastError.message);
         reject(new Error(chrome.runtime.lastError.message));
       } else {
         resolve(response);
@@ -254,26 +246,20 @@ async function saveSettings() {
 
 async function handleToggleChange(event) {
   const enabled = event.target.checked;
-  console.log('[FocusFlow Popup] handleToggleChange, enabled:', enabled);
-
+  
   if (enabled) {
-    console.log('[FocusFlow Popup] Calling enableExtension');
     await enableExtension();
   } else {
-    console.log('[FocusFlow Popup] Calling disableExtension');
     await disableExtension();
   }
 }
 
 async function enableExtension() {
-  console.log('[FocusFlow Popup] enableExtension called');
   try {
     // Get current tab URL (not popup URL) for YouTube video check
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     const videoUrl = tab?.url || tab?.href;
-    console.log('[FocusFlow Popup] Tab URL:', videoUrl);
-    console.log('[FocusFlow Popup] Tab ID:', tab?.id);
-
+    
     const response = await sendMessage({
       type: 'ENABLE',
       payload: {
@@ -282,8 +268,7 @@ async function enableExtension() {
         tabId: tab.id
       }
     });
-    console.log('[FocusFlow Popup] Response:', response);
-
+    
     if (response.success) {
       currentState = response.state;
       updateUI();
@@ -307,20 +292,16 @@ async function enableExtension() {
 }
 
 async function disableExtension() {
-  console.log('[FocusFlow Popup] disableExtension called, currentTabId:', currentTabId);
   try {
-    console.log('[FocusFlow Popup] Sending DISABLE message to background');
     const response = await sendMessage({
       type: 'DISABLE',
       payload: { tabId: currentTabId }
     });
 
-    console.log('[FocusFlow Popup] DISABLE response:', response);
     if (response.success) {
       currentState = response.state;
       updateUI();
       hideError();
-      console.log('[FocusFlow Popup] State updated to disabled');
     } else {
       console.error('[FocusFlow Popup] DISABLE failed:', response.error);
     }

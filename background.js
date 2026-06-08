@@ -235,9 +235,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
  * Handle messages from popup and content script
  */
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('[FocusFlow Background] Message received, type:', message.type, 'from:', sender.tab?.id || 'popup/worker', 'tab url:', sender.tab?.url?.substring(0, 80));
   handleMessage(message, sender).then((result) => {
-    console.log('[FocusFlow Background] Handler result for', message.type, ':', result);
     sendResponse(result);
   });
   return true; // Indicates async response
@@ -303,26 +301,21 @@ async function handleMessage(message, sender) {
 }
 
 async function handleEnable(tabId, payload) {
-  console.log('[FocusFlow Background] handleEnable called, tabId:', tabId, 'payload:', payload);
   if (!tabId) {
-    console.log('[FocusFlow Background] No tab ID, returning error');
     return { success: false, error: 'No tab ID' };
   }
 
   // Check if video is disabled
   const videoUrl = payload?.videoUrl;
-  console.log('[FocusFlow Background] Video URL:', videoUrl);
   if (videoUrl) {
     const disabled = await isVideoDisabled(videoUrl);
-    console.log('[FocusFlow Background] Video disabled?:', disabled);
     if (disabled) {
       return { success: false, error: 'Video disabled', videoDisabled: true };
     }
   }
 
   await setTabEnabledState(tabId, true);
-  console.log('[FocusFlow Background] Tab state set to enabled');
-
+  
   // Notify content script to start detection
   const sent = await sendMessageToContentScript(tabId, {
     type: 'START_DETECTION',
@@ -334,7 +327,6 @@ async function handleEnable(tabId, payload) {
   }
 
   // Content script not found — inject it dynamically
-  console.log('[FocusFlow Background] Injecting content scripts into tab:', tabId);
   try {
     const tab = await chrome.tabs.get(tabId);
     if (!tab?.url?.includes('youtube.com')) {
@@ -344,35 +336,29 @@ async function handleEnable(tabId, payload) {
       target: { tabId },
       files: ['overlay.js', 'content.js']
     });
-    console.log('[FocusFlow Background] Content scripts injected, retrying message');
     await chrome.tabs.sendMessage(tabId, {
       type: 'START_DETECTION',
       payload: payload || {}
     });
     return { success: true, state: 'enabled' };
   } catch (injectError) {
-    console.log('[FocusFlow Background] Injection failed:', injectError.message);
     return { success: true, state: 'enabled', note: 'Content script not ready' };
   }
 }
 
 async function handleDisable(tabId) {
-  console.log('[FocusFlow Background] handleDisable called, tabId:', tabId);
   if (!tabId) {
-    console.log('[FocusFlow Background] No tab ID, returning error');
     return { success: false, error: 'No tab ID' };
   }
 
   await setTabEnabledState(tabId, false);
-  console.log('[FocusFlow Background] Tab state set to disabled');
-
+  
   // Notify content script to stop detection
-  console.log('[FocusFlow Background] Sending STOP_DETECTION to tab:', tabId);
   try {
     await chrome.tabs.sendMessage(tabId, {
       type: 'STOP_DETECTION'
     });
-    console.log('[FocusFlow Background] STOP_DETECTION sent successfully');
+    
   } catch (error) {
     console.log('[FocusFlow Background] STOP_DETECTION failed:', error.message);
   }
@@ -522,7 +508,6 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
 });
 
 chrome.runtime.onInstalled.addListener(() => {
-  console.log('[FocusFlow] Extension installed/updated');
   createContextMenu();
 });
 
@@ -542,5 +527,3 @@ chrome.alarms.onAlarm.addListener((alarm) => {
     console.log('[FocusFlow] State sync alarm');
   }
 });
-
-console.log('[FocusFlow] Service worker initialized');
