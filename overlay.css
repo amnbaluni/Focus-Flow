@@ -1,0 +1,96 @@
+/**
+ * FocusFlow Overlay Styles
+ * Embedded via Shadow DOM - isolated from YouTube styles
+ */
+
+.focusflow-overlay {
+  position: absolute;
+  bottom: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+  padding: 12px 24px;
+  border-radius: 4px;
+  font-family: 'Roboto', Arial, sans-serif;
+  font-size: 14px;
+  z-index: 999999;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  animation: focusflow-fadeIn 0.2s ease-out;
+}
+
+@keyframes focusflow-fadeIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.focusflow-overlay-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.focusflow-icon {
+  font-size: 18px;
+}
+
+.focusflow-message {
+  font-weight: 500;
+}
+
+.focusflow-submessage {
+  opacity: 0.7;
+  font-size: 12px;
+}
+
+.focusflow-disable {
+  color: #aaa;
+  text-decoration: none;
+  font-size: 12px;
+  margin-left: 8px;
+  padding: 4px 8px;
+  border-radius: 2px;
+  transition: color 0.15s, background 0.15s;
+}
+
+.focusflow-disable:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.focusflow-indicator {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #4caf50;
+  z-index: 999999;
+  box-shadow: 0 0 4px rgba(76, 175, 80, 0.5);
+}
+
+.focusflow-indicator.inactive {
+  background: #f44336;
+  box-shadow: 0 0 4px rgba(244, 67, 54, 0.5);
+}
+
+.focusflow-indicator.processing {
+  background: #ff9800;
+  box-shadow: 0 0 4px rgba(255, 152, 0, 0.5);
+  animation: focusflow-pulse 1s infinite;
+}
+
+@keyframes focusflow-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}

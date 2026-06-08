@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FocusFlow</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="popup-container">
+    <header class="header">
+      <div class="logo">
+        <span class="logo-icon">◉</span>
+        <h1 class="title">FocusFlow</h1>
+      </div>
+      <span id="status-badge" class="status-badge inactive">Inactive</span>
+    </header>
+
+    <main class="main">
+      <section class="description">
+        <p>Automatically pauses YouTube videos when you look away and resumes when you return — all processing happens on your device.</p>
+      </section>
+
+      <section class="toggle-section">
+        <label class="toggle-label" for="enable-toggle">
+          <span class="toggle-text">Enable for this video</span>
+          <div class="toggle-switch">
+            <input type="checkbox" id="enable-toggle" class="toggle-input">
+            <span class="toggle-slider"></span>
+          </div>
+        </label>
+      </section>
+      
+      <button id="enable-btn" class="enable-btn">CLICK TO ENABLE</button>
+
+      <!-- Stats Section (Phase 02) -->
+      <section class="stats-section">
+        <div class="stat-card">
+          <span class="stat-label">PAUSES TODAY</span>
+          <span id="pause-count" class="stat-value">0</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">TIME SAVED</span>
+          <span id="time-saved" class="stat-value">0 min</span>
+        </div>
+      </section>
+
+      <!-- Camera Status -->
+      <section id="camera-status" class="camera-status hidden">
+        <div class="camera-indicator">
+          <span class="camera-dot"></span>
+          <span class="camera-text">Camera active</span>
+        </div>
+      </section>
+
+      <!-- Settings Sliders (Phase 02) -->
+      <section class="settings-section">
+        <h3 class="settings-title">Settings</h3>
+        
+        <div class="slider-control">
+          <label for="grace-period">
+            <span class="slider-label">Grace period</span>
+            <span id="grace-period-value" class="slider-value">5s</span>
+          </label>
+          <input type="range" id="grace-period" min="3" max="30" step="1" value="5">
+        </div>
+
+        <div class="slider-control">
+          <label for="yaw-threshold">
+            <span class="slider-label">Yaw threshold</span>
+            <span id="yaw-threshold-value" class="slider-value">30°</span>
+          </label>
+          <input type="range" id="yaw-threshold" min="15" max="45" step="5" value="30">
+        </div>
+
+        <div class="slider-control">
+          <label for="pitch-threshold">
+            <span class="slider-label">Pitch threshold</span>
+            <span id="pitch-threshold-value" class="slider-value">25°</span>
+          </label>
+          <input type="range" id="pitch-threshold" min="15" max="35" step="5" value="25">
+        </div>
+      </section>
+
+      <!-- Error Message -->
+      <section id="error-message" class="error-message hidden">
+        <p>Camera access denied. Extension remains inactive.</p>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <button id="reset-stats-btn" class="reset-btn">Reset Stats</button>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
