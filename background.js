@@ -518,12 +518,10 @@ chrome.runtime.onInstalled.addListener(() => {
 /**
  * Set up periodic alarm for state sync
  */
-chrome.alarms.create('stateSync', {
-  periodInMinutes: 5
-});
-
-chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === 'stateSync') {
-    console.log('[FocusFlow] State sync alarm');
-  }
-});
+// [OPT] Removed: stateSync alarm was a no-op that unnecessarily woke the service worker every 5 minutes
+// chrome.alarms.create('stateSync', { periodInMinutes: 5 });
+// chrome.alarms.onAlarm.addListener((alarm) => {
+//   if (alarm.name === 'stateSync') {
+//     console.log('[FocusFlow] State sync alarm');
+//   }
+// });

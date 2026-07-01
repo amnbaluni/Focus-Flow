@@ -9,7 +9,8 @@
   }
 
   function handleWorkerError(err) {
-    window.parent.postMessage({ source: 'focusflow-proxy', type: 'error', error: err.message }, '*');
+    if (worker) { worker.terminate(); worker = null; } // [OPT] Free WASM heap on worker crash
+    window.parent.postMessage({ source: 'focusflow-proxy', type: 'error', error: err.message, fatal: true }, '*'); // [OPT] Mark as fatal
   }
 
   window.addEventListener('message', function(e) {

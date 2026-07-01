@@ -54,9 +54,8 @@ async function processFrame(imageDataBuffer) {
 
   try {
     if (typeof imageDataBuffer === 'object' && imageDataBuffer instanceof ArrayBuffer) {
-      const clamped = new Uint8ClampedArray(new Uint8Array(imageDataBuffer));
-      const imageData = new ImageData(
-        new Uint8ClampedArray(clamped),
+      const imageData = new ImageData( // [OPT] Eliminate redundant copies — construct directly from transferred buffer
+        new Uint8ClampedArray(imageDataBuffer),
         canvasWidth,
         canvasHeight
       );

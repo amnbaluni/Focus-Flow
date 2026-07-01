@@ -100,6 +100,12 @@
   let studyModeObserver = null;
   let studyModeVideoEndedHandler = null;
 
+  let frameTimer = null; // [OPT] Store setTimeout handle for cancellation
+  let initTimeout = null; // [OPT] Store init timeout handle for cancellation
+  let oldVideoEl = null; // [OPT] Track previous video element for listener cleanup
+  let oldPlayHandler = null; // [OPT] Track previous play handler for cleanup
+  let wasCameraEnabled = false; // [OPT] Track whether camera was running before suspend
+
   function enableStudyMode() {
     if (STUDY_MODE.enabled) return;
     STUDY_MODE.enabled = true;
@@ -118,6 +124,7 @@
     teardownStudyModeClickInterception();
     restoreHistoryAPI();
     teardownStudyModeAutoplaySuppression();
+    if (studyModeObserver) { studyModeObserver.disconnect(); studyModeObserver = null; } // [OPT] Prevent observer leak
   }
 
   function injectStudyModeCSS() {
@@ -296,12 +303,39 @@
     });
   }
 
-  function setupStudyModeNavigationHandler() {
+  function performFullTeardown() { // [OPT] Full cleanup for SPA nav and page unload
+    if (uncertainTimer) {
+      clearTimeout(uncertainTimer);
+      uncertainTimer = null;
+    }
+    if (frameTimer) { clearTimeout(frameTimer); frameTimer = null; } // [OPT]
+    if (initTimeout) { clearTimeout(initTimeout); initTimeout = null; } // [OPT]
+    if (videoObserver) { videoObserver.disconnect(); videoObserver = null; } // [OPT] Prevent observer leak
+    cleanupProxy();
+    if (cameraVideoEl) {
+      cameraVideoEl.remove();
+      cameraVideoEl = null;
+    }
+    if (stream) {
+      stream.getTracks().forEach(t => t.stop());
+      stream = null;
+    }
+    cameraEnabled = false;
+    isProcessing = false;
+    FocusFlowOverlay?.hide();
+  }
+
+  function setupNavigationHandler() { // [OPT] Combined navigation handler with full teardown
     document.addEventListener('yt-navigate-finish', () => {
-      if (STUDY_MODE.enabled) {
-        applyStudyModeGraying();
-        setupStudyModeAutoplaySuppression();
-      }
+      performFullTeardown();
+      setTimeout(() => {
+        setupVideoDetection();
+        if (STUDY_MODE.enabled) {
+          applyStudyModeGraying();
+          setupStudyModeAutoplaySuppression();
+        }
+        checkInitialState();
+      }, 500);
     });
   }
 
@@ -311,7 +345,9 @@
       setupServiceWorkerConnection();
       loadSettings();
       setupStudyModeObserver();
-      setupStudyModeNavigationHandler();
+      setupNavigationHandler(); // [OPT] Replaces setupStudyModeNavigationHandler
+      document.addEventListener('visibilitychange', handleVisibilityChange); // [OPT] Stop camera when tab hidden
+      window.addEventListener('beforeunload', performFullTeardown); // [OPT] Cleanup on page unload
     } catch (err) {
       console.error('[FocusFlow] Init error:', err);
     }
@@ -359,7 +395,12 @@
     if (!videoEl) {
       return;
     }
+    if (oldVideoEl && oldPlayHandler) { // [OPT] Clean up old listener to prevent leak
+      oldVideoEl.removeEventListener('play', oldPlayHandler);
+    }
     videoEl.addEventListener('play', handleUserPlay);
+    oldVideoEl = videoEl; // [OPT] Store reference for cleanup
+    oldPlayHandler = handleUserPlay; // [OPT] Store reference for cleanup
   }
 
   function handleUserPlay() {
@@ -398,7 +439,7 @@
   }
 
   async function initWorker() {
-    if (proxyReady) {
+    if (proxyReady || (workerIframe && document.body.contains(workerIframe))) { // [OPT] Guard against double init
       return;
     }
     try {
@@ -417,13 +458,14 @@
       return;
     }
 
-    setTimeout(() => {
+    initTimeout = setTimeout(() => { // [OPT] Store handle for cancellation
       if (!workerReady) {
         console.error('[FocusFlow Content] Worker failed to initialize within 15s timeout');
         cleanupProxy();
       } else {
         console.log('[FocusFlow Content] Worker ready within timeout');
       }
+      initTimeout = null; // [OPT] Clear handle after firing
     }, 15000);
   }
 
@@ -442,6 +484,7 @@
     const data = e.data;
     if (data.type === 'ready') {
       workerReady = true;
+      if (initTimeout) { clearTimeout(initTimeout); initTimeout = null; } // [OPT] Cancel init timeout
     } else if (data.type === 'landmarks') {
       pendingFrames = Math.max(0, pendingFrames - 1);
       const landmarkCount = data.landmarks ? data.landmarks.length : 0;
@@ -495,10 +538,13 @@
   }
 
   function stopCamera() {
+    wasCameraEnabled = false; // [OPT] Prevent visibility resume
     if (uncertainTimer) {
       clearTimeout(uncertainTimer);
       uncertainTimer = null;
     }
+    if (frameTimer) { clearTimeout(frameTimer); frameTimer = null; } // [OPT] Cancel scheduled frame
+    if (initTimeout) { clearTimeout(initTimeout); initTimeout = null; } // [OPT] Cancel init timeout
     cleanupProxy();
     if (cameraVideoEl) {
       cameraVideoEl.remove();
@@ -515,6 +561,42 @@
     state = 'DISABLED';
     FocusFlowOverlay?.hide();
     notifyStateChange('DISABLED');
+  }
+
+  function suspendCamera() { // [OPT] Stop camera without changing persisted state
+    if (uncertainTimer) {
+      clearTimeout(uncertainTimer);
+      uncertainTimer = null;
+    }
+    if (frameTimer) { clearTimeout(frameTimer); frameTimer = null; } // [OPT]
+    if (initTimeout) { clearTimeout(initTimeout); initTimeout = null; } // [OPT]
+    cleanupProxy();
+    if (cameraVideoEl) {
+      cameraVideoEl.remove();
+      cameraVideoEl = null;
+    }
+    if (stream) {
+      stream.getTracks().forEach(t => t.stop());
+      stream = null;
+    }
+    cameraEnabled = false;
+    isProcessing = false;
+    FocusFlowOverlay?.hide();
+  }
+
+  function resumeCamera() { // [OPT] Restart camera after visibility resume
+    wasCameraEnabled = false;
+    if (state === 'DISABLED') return;
+    startCamera();
+  }
+
+  function handleVisibilityChange() { // [OPT] Handle tab visibility changes
+    if (document.visibilityState === 'hidden' && cameraEnabled) {
+      wasCameraEnabled = true;
+      suspendCamera();
+    } else if (document.visibilityState === 'visible' && wasCameraEnabled && state !== 'DISABLED') {
+      resumeCamera();
+    }
   }
 
   function initFrameCapture() {
@@ -560,7 +642,7 @@
   function scheduleNextFrame() {
     if (!cameraEnabled) return;
     isProcessing = false;
-    setTimeout(startFrameLoop, 1000 / CONFIG.FPS);
+    frameTimer = setTimeout(startFrameLoop, 1000 / CONFIG.FPS); // [OPT] Store handle for cancellation
   }
 
   function processAttentionSignals(landmarks, confidence) {
